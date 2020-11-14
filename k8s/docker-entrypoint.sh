@@ -42,7 +42,7 @@ restore() {
     else
         echo "Restoring backup $BACKUP_NAME"
         python3 -m medusa.service.grpc.restore
-        echo $restore_key > $last_restore_file
+        echo $RESTORE_KEY > $last_restore_file
     fi
 }
 
