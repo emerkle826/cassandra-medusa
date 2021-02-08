@@ -172,7 +172,7 @@ jobs:
             printf "%s" '${{ secrets.MEDUSA_AZURE_CREDENTIALS }}' > ~/medusa_azure_credentials.json
             ./run_integration_tests.sh -v --azure --no-local --cassandra-version=${{ matrix.cassandra-version }}
           else
-            ./run_integration_tests.sh -v --cassandra-version=${{ matrix.cassandra-version }}
+            ./run_integration_tests.sh -v --cassandra-version=${{ matrix.cassandra-version }} -t 18
           fi
         fi
 

@@ -337,8 +337,7 @@ def _i_have_a_fresh_ccm_cluster_with_mgmt_api_running(context, cluster_name, cli
     conf_file = os.path.expanduser("~/.ccm/{}/node1/conf/cassandra-env.sh".format(context.cluster_name))
     with open(conf_file, "a") as config_file:
         config_file.write(
-            'JVM_OPTS="$JVM_OPTS -Ddb.unix_socket_file=/tmp/cassandra.sock '
-            '-javaagent:/tmp/management-api-agent/target/datastax-mgmtapi-agent-0.1.0-SNAPSHOT.jar" '
+            'JVM_OPTS="$JVM_OPTS -javaagent:/tmp/management-api-agent/target/datastax-mgmtapi-agent-0.1.0-SNAPSHOT.jar"'
         )
     # get the Cassandra Management API jars
     get_mgmt_api_jars(version=context.cassandra_version)
