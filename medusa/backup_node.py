@@ -20,18 +20,19 @@ import logging
 import os
 import pathlib
 import psutil
-import sys
 import time
 import traceback
 
 from libcloud.storage.providers import Provider
 from retrying import retry
 
+import medusa.utils
 from medusa.cassandra_utils import Cassandra
 from medusa.index import add_backup_start_to_index, add_backup_finish_to_index, set_latest_backup_in_index
 from medusa.monitoring import Monitoring
 from medusa.storage.s3_storage import is_aws_s3
-from medusa.storage import Storage, format_bytes_str, ManifestObject
+from medusa.storage.google_storage import GSUTIL_MAX_FILES_PER_CHUNK
+from medusa.storage import Storage, format_bytes_str, ManifestObject, divide_chunks
 
 
 class NodeBackupCache(object):
@@ -153,14 +154,13 @@ def stagger(fqdn, storage, tokenmap):
 
 
 def main(config, backup_name_arg, stagger_time, mode):
-
     start = datetime.datetime.now()
     backup_name = backup_name_arg or start.strftime('%Y%m%d%H')
     monitoring = Monitoring(config=config.monitoring)
 
     try:
         storage = Storage(config=config.storage)
-        cassandra = Cassandra(config.cassandra)
+        cassandra = Cassandra(config)
 
         differential_mode = False
         if mode == "differential":
@@ -181,9 +181,7 @@ def main(config, backup_name_arg, stagger_time, mode):
         except Exception:
             logging.warning("Throttling backup impossible. It's probable that ionice is not available.")
 
-        logging.info('Creating snapshot')
         logging.info('Saving tokenmap and schema')
-
         schema, tokenmap = get_schema_and_tokenmap(cassandra)
 
         node_backup.schema = schema
@@ -206,7 +204,7 @@ def main(config, backup_name_arg, stagger_time, mode):
         actual_start = datetime.datetime.now()
 
         num_files, node_backup_cache = do_backup(
-            cassandra, node_backup, storage, differential_mode, config)
+            cassandra, node_backup, storage, differential_mode, config, backup_name)
 
         end = datetime.datetime.now()
         actual_backup_duration = end - actual_start
@@ -219,10 +217,11 @@ def main(config, backup_name_arg, stagger_time, mode):
     except Exception as e:
         tags = ['medusa-node-backup', 'backup-error', backup_name]
         monitoring.send(tags, 1)
-        logging.error('This error happened during the backup: {}'.format(str(e)))
-        traceback.print_exc()
-        sys.exit(1)
-
+        medusa.utils.handle_exception(
+            e,
+            "This error happened during the backup: {}".format(str(e)),
+            config
+        )
 
 # Wait 2^i * 10 seconds between each retry, up to 2 minutes between attempts, which is right after the
 # attempt on which it waited for 60 seconds
@@ -234,7 +233,8 @@ def get_schema_and_tokenmap(cassandra):
     return schema, tokenmap
 
 
-def do_backup(cassandra, node_backup, storage, differential_mode, config):
+def do_backup(cassandra, node_backup, storage, differential_mode,
+              config, backup_name):
 
     # Load last backup as a cache
     node_backup_cache = NodeBackupCache(
@@ -250,7 +250,8 @@ def do_backup(cassandra, node_backup, storage, differential_mode, config):
     # the cassandra snapshot we use defines __exit__ that cleans up the snapshot
     # so even if exception is thrown, a new snapshot will be created on the next run
     # this is not too good and we will use just one snapshot in the future
-    with cassandra.create_snapshot() as snapshot:
+    logging.info('Creating snapshot')
+    with cassandra.create_snapshot(backup_name) as snapshot:
         manifest = []
         num_files = backup_snapshots(storage, manifest, node_backup, node_backup_cache, snapshot)
 
@@ -322,7 +323,11 @@ def backup_snapshots(storage, manifest, node_backup, node_backup_cache, snapshot
 
             manifest_objects = list()
             if len(needs_backup) > 0:
-                manifest_objects = storage.storage_driver.upload_blobs(needs_backup, dst_path)
+                # If there is a plenty of files to upload it should be
+                # splitted to batches due to 'gsutil cp' which
+                # can't handle too much source files via STDIN.
+                for src_batch in divide_chunks(needs_backup, GSUTIL_MAX_FILES_PER_CHUNK):
+                    manifest_objects += storage.storage_driver.upload_blobs(src_batch, dst_path)
 
             # Reintroducing already backed up objects in the manifest in differential
             for obj in already_backed_up:

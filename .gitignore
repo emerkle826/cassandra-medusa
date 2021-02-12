@@ -4,6 +4,7 @@ __pycache__/
 .idea
 # C extensions
 *.so
+*.swp
 .tox/
 /.idea/
 /env/
@@ -11,6 +12,7 @@ __pycache__/
 /dist/
 /packages/
 /venv/
+/scripts/venv/
 medusa.iml
 /*.egg-info/
 .vscode/settings.json

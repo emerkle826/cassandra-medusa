@@ -20,6 +20,7 @@ Feature: Integration tests
     @1
     Scenario Outline: Perform a backup, verify it, and restore it.
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario1"
+        Then Test TLS version connections if "<client encryption>" is turned on
         Given I am using "<storage>" as storage provider in ccm cluster "<client encryption>"
         When I create the "test" table in keyspace "medusa"
         When I load 100 rows in the "medusa.test" table
@@ -56,6 +57,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      | without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @2
     Scenario Outline: Perform a backup and verify its index
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario2"
@@ -87,6 +98,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @3
     Scenario Outline: Perform a backup and verify the latest backup is updated correctly
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario3"
@@ -115,6 +136,16 @@ Feature: Integration tests
         Examples: Google Cloud Storage
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
+
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
 
     @4
     Scenario Outline: Perform a fake backup (by just writing an index) on different days and verify reports are correct
@@ -288,6 +319,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @9
     Scenario Outline: Run a purge on backups
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario9"
@@ -338,6 +379,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @10
     Scenario Outline: Run a backup and restore and verify metrics
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario10"
@@ -364,6 +415,16 @@ Feature: Integration tests
         Examples: Google Cloud Storage
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
+
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
 
     @11
     Scenario Outline: Perform a backup, and restore it using the sstableloader
@@ -398,6 +459,16 @@ Feature: Integration tests
         Examples: Google Cloud Storage
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
+
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
 
     @12
     Scenario Outline: Backup two tables but restore only one
@@ -435,6 +506,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @13
     Scenario Outline: Perform a backup and a restore, then verify the restore
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario13"
@@ -461,6 +542,16 @@ Feature: Integration tests
         Examples: Google Cloud Storage
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
+
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
 
     @14
     Scenario Outline: Perform a backup & restore of a table with secondary index
@@ -491,6 +582,16 @@ Feature: Integration tests
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
 
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs      | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
     @15
     Scenario Outline: Do a full backup, then a differential one
         Given I have a fresh ccm cluster "<client encryption>" running named "scenario15"
@@ -517,3 +618,80 @@ Feature: Integration tests
         Examples: Google Cloud Storage
         | storage           | client encryption |
         | google_storage      |  without_client_encryption |
+
+        @azure
+        Examples: Azure Blob Storage
+        | storage           | client encryption |
+        | azure_blobs     | without_client_encryption |
+        
+        @ibm
+        Examples: IBM Cloud Object Storage
+        | storage           | client encryption |
+        | ibm_storage      | without_client_encryption |
+
+    @16
+    Scenario Outline: Perform a differential backup over gRPC , verify its index, then delete it over gRPC with Jolokia
+        Given I have a fresh ccm cluster with jolokia "<client encryption>" running named "scenario16"
+        Given I am using "<storage>" as storage provider in ccm cluster "<client encryption>" with gRPC server
+        Then the gRPC server is up
+        When I create the "test" table in keyspace "medusa"
+        When I load 100 rows in the "medusa.test" table
+        When I run a "ccm node1 nodetool flush" command
+        When I perform a backup over gRPC in "differential" mode of the node named "grpc_backup"
+        Then the backup index exists
+        Then I verify over gRPC that the backup "grpc_backup" exists
+        Then I can see the backup index entry for "grpc_backup"
+        Then I can see the latest backup for "127.0.0.1" being called "grpc_backup"
+        Then I delete the backup "grpc_backup" over gRPC
+        Then I verify over gRPC the backup "grpc_backup" does not exist
+        Then I shutdown the gRPC server
+
+        @local
+        Examples: Local storage
+        | storage           | client encryption |
+        | local      |  with_client_encryption |
+
+    @17
+    Scenario Outline: Perform a differential backup over gRPC , verify its index, then delete it over gRPC with failures
+        Given I have a fresh ccm cluster with jolokia "<client encryption>" running named "scenario17"
+        Given I am using "<storage>" as storage provider in ccm cluster "<client encryption>" with gRPC server
+        Then the gRPC server is up
+        When I create the "test" table in keyspace "medusa"
+        When I load 100 rows in the "medusa.test" table
+        When I run a "ccm node1 nodetool flush" command
+        When I perform a backup over gRPC in "differential" mode of the node named "grpc_backup"
+        Then the backup index exists
+        Then I verify over gRPC that the backup "grpc_backup" exists
+        When I perform a backup over gRPC in "differential" mode of the node named "grpc_backup" and it fails
+        Then I delete the backup "grpc_backup" over gRPC
+        Then I delete the backup "grpc_backup" over gRPC and it fails
+        Then I verify over gRPC the backup "grpc_backup" does not exist
+        Then I shutdown the gRPC server
+
+        @local
+        Examples: Local storage
+        | storage           | client encryption |
+        | local      |  with_client_encryption |
+
+    @18 @skip-cassandra-2
+    Scenario Outline: Perform a differential backup over gRPC , verify its index, then delete it over gRPC with management API
+        Given I have a fresh ccm cluster with mgmt api "<client encryption>" named "scenario18"
+        Given I am using "<storage>" as storage provider in ccm cluster "<client encryption>" with mgmt api
+        Then the gRPC server is up
+        When I create the "test" table in keyspace "medusa"
+        When I load 100 rows in the "medusa.test" table
+        When I run a "ccm node1 nodetool flush" command
+        When I perform a backup over gRPC in "differential" mode of the node named "grpc_backup"
+        Then the backup index exists
+        Then I verify over gRPC that the backup "grpc_backup" exists
+        Then I can see the backup index entry for "grpc_backup"
+        Then I can see the latest backup for "127.0.0.1" being called "grpc_backup"
+        Then I delete the backup "grpc_backup" over gRPC
+        Then I verify over gRPC the backup "grpc_backup" does not exist
+        Then I shutdown the gRPC server
+        Then I shutdown the mgmt api server
+
+        @local
+        Examples: Local storage
+        | storage           | client encryption |
+        | local      |  with_client_encryption |

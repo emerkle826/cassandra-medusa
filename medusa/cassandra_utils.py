@@ -19,22 +19,23 @@
 import fileinput
 import itertools
 import logging
-import os
 import pathlib
 import shlex
 import socket
 import subprocess
 import time
-import uuid
 import yaml
+from medusa.utils import null_if_empty
 
 from subprocess import PIPE
 from retrying import retry
 from cassandra.cluster import Cluster, ExecutionProfile
 from cassandra.policies import WhiteListRoundRobinPolicy
 from cassandra.auth import PlainTextAuthProvider
-from ssl import SSLContext, PROTOCOL_TLSv1, CERT_REQUIRED
+from ssl import SSLContext, PROTOCOL_TLS, CERT_REQUIRED
 from medusa.network.hostname_resolver import HostnameResolver
+from medusa.service.snapshot import SnapshotService
+from medusa.nodetool import Nodetool
 
 
 class SnapshotPath(object):
@@ -57,19 +58,19 @@ class CqlSessionProvider(object):
         self._ssl_context = None
         self._cassandra_config = cassandra_config
 
-        if cassandra_config.cql_username is not None and cassandra_config.cql_password is not None:
+        if null_if_empty(cassandra_config.cql_username) and null_if_empty(cassandra_config.cql_password):
             auth_provider = PlainTextAuthProvider(username=cassandra_config.cql_username,
                                                   password=cassandra_config.cql_password)
             self._auth_provider = auth_provider
 
-        if cassandra_config.certfile is not None and cassandra_config.usercert is not None and \
-           cassandra_config.userkey is not None:
-            ssl_context = SSLContext(PROTOCOL_TLSv1)
+        if cassandra_config.certfile is not None:
+            ssl_context = SSLContext(PROTOCOL_TLS)
             ssl_context.load_verify_locations(cassandra_config.certfile)
             ssl_context.verify_mode = CERT_REQUIRED
-            ssl_context.load_cert_chain(
-                certfile=cassandra_config.usercert,
-                keyfile=cassandra_config.userkey)
+            if cassandra_config.usercert is not None and cassandra_config.userkey is not None:
+                ssl_context.load_cert_chain(
+                    certfile=cassandra_config.usercert,
+                    keyfile=cassandra_config.userkey)
             self._ssl_context = ssl_context
 
         load_balancing_policy = WhiteListRoundRobinPolicy(ip_addresses)
@@ -106,28 +107,6 @@ class CqlSessionProvider(object):
         else:
             session = cluster.connect()
             return CqlSession(session, self._cassandra_config.resolve_ip_addresses)
-
-
-class Nodetool(object):
-
-    def __init__(self, cassandra_config):
-        self._nodetool = ['nodetool']
-        if cassandra_config.nodetool_ssl == "true":
-            self._nodetool += ['--ssl']
-        if cassandra_config.nodetool_username is not None:
-            self._nodetool += ['-u', cassandra_config.nodetool_username]
-        if cassandra_config.nodetool_password is not None:
-            self._nodetool += ['-pw', cassandra_config.nodetool_password]
-        if cassandra_config.nodetool_password_file_path is not None:
-            self._nodetool += ['-pwf', cassandra_config.nodetool_password_file_path]
-        if cassandra_config.nodetool_host is not None:
-            self._nodetool += ['-h', cassandra_config.nodetool_host]
-        if cassandra_config.nodetool_port is not None:
-            self._nodetool += ['-p', cassandra_config.nodetool_port]
-
-    @property
-    def nodetool(self):
-        return self._nodetool
 
 
 class CqlSession(object):
@@ -234,7 +213,7 @@ class CassandraConfigReader(object):
 
     @property
     def root(self):
-        data_file_directories = self._config.get('data_file_directories')
+        data_file_directories = self._config.get('data_file_directories', ['/var/lib/cassandra/data'])
         if not data_file_directories:
             raise RuntimeError('data_file_directories must be properly configured')
         if len(data_file_directories) > 1:
@@ -243,14 +222,14 @@ class CassandraConfigReader(object):
 
     @property
     def commitlog_directory(self):
-        commitlog_directory = self._config.get('commitlog_directory')
+        commitlog_directory = self._config.get('commitlog_directory', '/var/lib/cassandra/commitlog')
         if not commitlog_directory:
             raise RuntimeError('commitlog_directory must be properly configured')
         return pathlib.Path(commitlog_directory)
 
     @property
     def saved_caches_directory(self):
-        saved_caches_directory = self._config.get('saved_caches_directory')
+        saved_caches_directory = self._config.get('saved_caches_directory', '/var/lib/cassandra/saved_caches')
         if not saved_caches_directory:
             raise RuntimeError('saved_caches_directory must be properly configured')
         return pathlib.Path(saved_caches_directory)
@@ -297,8 +276,10 @@ class CassandraConfigReader(object):
 class Cassandra(object):
 
     SNAPSHOT_PATTERN = '*/*/snapshots/{}'
+    SNAPSHOT_PREFIX = 'medusa-'
 
-    def __init__(self, cassandra_config, contact_point=None):
+    def __init__(self, config, contact_point=None):
+        cassandra_config = config.cassandra
         self._start_cmd = shlex.split(cassandra_config.start_cmd)
         self._stop_cmd = shlex.split(cassandra_config.stop_cmd)
         self._is_ccm = int(shlex.split(cassandra_config.is_ccm)[0])
@@ -320,6 +301,10 @@ class Cassandra(object):
         self._native_port = config_reader.native_port
         self._rpc_port = config_reader.rpc_port
         self.seeds = config_reader.seeds
+
+        self.grpc_config = config.grpc
+        self.kubernetes_config = config.kubernetes
+        self.snapshot_service = SnapshotService(config=config).snapshot_service
 
     def _has_systemd(self):
         try:
@@ -406,34 +391,16 @@ class Cassandra(object):
         def __repr__(self):
             return '{}<{}>'.format(self.__class__.__qualname__, self._tag)
 
-    def create_snapshot(self):
-        tag = 'medusa-{}'.format(uuid.uuid4())
-        cmd = self._nodetool.nodetool + ['snapshot', '-t', tag]
-
-        if self._is_ccm == 1:
-            os.popen('ccm node1 nodetool \"snapshot -t {}\"'.format(tag)).read()
-        else:
-            logging.debug('Executing: {}'.format(' '.join(cmd)))
-            subprocess.check_call(cmd, stdout=subprocess.DEVNULL, universal_newlines=True)
+    def create_snapshot(self, backup_name):
+        tag = "{}{}".format(self.SNAPSHOT_PREFIX, backup_name)
+        if not self.snapshot_exists(tag):
+            self.snapshot_service.create_snapshot(tag=tag)
 
         return Cassandra.Snapshot(self, tag)
 
     def delete_snapshot(self, tag):
-        cmd = self._nodetool.nodetool + ['clearsnapshot', '-t', tag]
-
-        if self._is_ccm == 1:
-            os.popen('ccm node1 nodetool \"clearsnapshot -t {}\"'.format(tag)).read()
-        else:
-            logging.debug('Executing: {}'.format(' '.join(cmd)))
-            try:
-                output = subprocess.check_output(cmd, universal_newlines=True)
-                logging.debug('nodetool output: {}'.format(output))
-            except subprocess.CalledProcessError as e:
-                logging.debug('nodetool resulted in error: {}'.format(e.output))
-                logging.warning(
-                    'Medusa may have failed at cleaning up snapshot {}. '
-                    'Check if the snapshot exists and clear it manually '
-                    'by running: {}'.format(tag, ' '.join(cmd)))
+        if self.snapshot_exists(tag):
+            self.snapshot_service.delete_snapshot(tag=tag)
 
     def list_snapshotnames(self):
         return {
@@ -453,6 +420,29 @@ class Cassandra(object):
             if snapshot.is_dir() and snapshot.name == tag:
                 return True
         return False
+
+    def create_snapshot_command(self, backup_name):
+        """
+        :param backup_name: string name of the medusa backup
+        :return: Array representation of a command to create a snapshot
+        """
+        tag = '{}{}'.format(self.SNAPSHOT_PREFIX, backup_name)
+        if self._is_ccm == 1:
+            cmd = 'ccm node1 nodetool \"snapshot -t {}\"'.format(tag)
+        else:
+            cmd = self._nodetool.nodetool + ['snapshot', '-t', tag]
+        return cmd
+
+    def delete_snapshot_command(self, tag):
+        """
+        :param tag: string snapshot name
+        :return: Array repesentation of a command to delete a snapshot
+        """
+        if self._is_ccm == 1:
+            cmd = 'ccm node1 nodetool \"clearsnapshot -t {}\"'.format(tag)
+        else:
+            cmd = self._nodetool.nodetool + ['clearsnapshot', '-t', tag]
+        return cmd
 
     def _columnfamily_path(self, keyspace_name, columnfamily_name, cf_id):
         root = pathlib.Path(self._root)
@@ -588,7 +578,7 @@ def is_node_up(config, host):
         else:
             return is_ccm_up(args, 'statusbinary')
     else:
-        cassandra = Cassandra(config.cassandra)
+        cassandra = Cassandra(config)
         native_port = cassandra.native_port
         rpc_port = cassandra.rpc_port
         if health_check == 'thrift':
