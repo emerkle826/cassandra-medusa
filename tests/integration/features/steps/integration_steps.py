@@ -142,23 +142,19 @@ class MgmtApiServer:
                 os.kill(pid, signal.SIGKILL)
 
     def __init__(self, config, cluster_name):
-        self.config = config
         self.cluster_name = cluster_name
-        self.medusa_conf_file = "/tmp/medusa_grpc/medusa.ini"
-        with open(self.medusa_conf_file, "w") as config_file:
-            self.config.write(config_file)
-            # cmd = ["python3", "-m", "medusa.service.grpc.server", "server.py", self.medusa_conf_file]
-            cmd = ["java", "-jar", "/tmp/management-api-server/target/datastax-mgmtapi-server-0.1.0-SNAPSHOT.jar",
-                   "--db-socket=/tmp/db.sock",
-                   "--host=unix:///tmp/mgmtapi.sock",
-                   "--host=http://localhost:8080",
-                   "--db-home={}/.ccm/{}/node1".format(str(Path.home()), self.cluster_name),
-                   "--explicit-start",
-                   "true",
-                   "--no-keep-alive",
-                   "true",
-                   ]
-            subprocess.Popen(cmd, cwd=os.path.abspath("../"))
+        env = {**os.environ, "MGMT_API_LOG_DIR": '/tmp'}
+        cmd = ["java", "-jar", "/tmp/management-api-server/target/datastax-mgmtapi-server-0.1.0-SNAPSHOT.jar",
+               "--db-socket=/tmp/db.sock",
+               "--host=unix:///tmp/mgmtapi.sock",
+               "--host=http://localhost:8080",
+               "--db-home={}/.ccm/{}/node1".format(str(Path.home()), self.cluster_name),
+               "--explicit-start",
+               "true",
+               "--no-keep-alive",
+               "true",
+               ]
+        subprocess.Popen(cmd, cwd=os.path.abspath("../"), env=env)
 
     @staticmethod
     def start():
@@ -1418,7 +1414,7 @@ def write_dummy_file(path, mtime_str, contents=None):
 
 def get_mgmt_api_jars(
         version,
-        url="https://github.com/datastax/management-api-for-apache-cassandra/releases/download/v0.1.20/jars.zip"):
+        url="https://github.com/datastax/management-api-for-apache-cassandra/releases/download/v0.1.21/jars.zip"):
 
     # clear out any temp resources thatmight exist
     remove_temporary_mgmtapi_resources()
