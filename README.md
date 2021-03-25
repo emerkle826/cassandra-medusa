@@ -15,8 +15,8 @@
 # limitations under the License.
 -->
 
-Medusa
-======
+Medusa for Apache Cassandra&trade;
+==================================
 
 Medusa is an Apache Cassandra backup system.
 

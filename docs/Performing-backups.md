@@ -94,10 +94,10 @@ All Medusa backups only copy new SSTables from the nodes, reducing the network t
 
 Full backups create a complete copy of all SSTables on the node each time they run. Files that have not changed since the last backup will be copied in the backup catalog into the new backup (and not copied off the node). In contrast to the differential method which only creates a reference to files. Full backups are useful when you need to take a complete copy and have all the files in a single location.
 
-![Full backups with Cassandra Medusa](https://raw.githubusercontent.com/wiki/thelastpickle/cassandra-medusa/images/Medusa_current_full_backups.png)
+![Full backups with Medusa for Apache Cassandra](images/medusa_current_full_backups.png)
 
 Differential backups take advantage of the immutable SSTables created by the Log Structured Merge Tree storage engine used by Cassanda. In this mode Medusa checks if the SSTable has previously being backed up, and only copies the new files (just like always). However all SSTables for the node are then stored in a single common folder, and the backup manifest contains only metadata files and references to the SSTables.
 
-![Differential backups with Cassandra Medusa](https://raw.githubusercontent.com/wiki/thelastpickle/cassandra-medusa/images/medusa_incremental_backup.png)
+![Differential backups with Medusa for Apache Cassandra](images/medusa_incremental_backup.png)
 
 

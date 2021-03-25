@@ -42,7 +42,7 @@ While orchestration is lacking for backups, Medusa coordinates restoring a whole
 
 This is the simplest case: restoring a backup to the same cluster. The topology of the cluster has not changed and all the nodes that were present at the time the backup was created are still running in the cluster.
 
-![Cassandra Medusa Full Backups](https://raw.githubusercontent.com/wiki/thelastpickle/cassandra-medusa/images/cassandra_medusa_restore_case_1.png)
+![Medusa for Apache Cassandra Full Backups](images/cassandra_medusa_restore_case_1.png)
 
 
 Use the following command to run an in-place restore:  
@@ -73,7 +73,7 @@ Restoring to a different cluster with the same number of nodes is a little harde
 - The nodes may have different names.
 - The nodes may have different token assignments.
 
-![Cassandra Medusa Full Backups](https://raw.githubusercontent.com/wiki/thelastpickle/cassandra-medusa/images/cassandra_medusa_restore_case_2.png)
+![Medusa for Apache Cassandra Full Backups](images/cassandra_medusa_restore_case_2.png)
 
 Use the following command to run a remote restore:
 
@@ -117,7 +117,7 @@ The last point is the crux of the matter. We cannot get the same token assignmen
 
 To support restoring data into a different topology Medusa uses the `sstableloader` tool from the Cassandra code base. While slower than copying the files from the backup the sstableloader is able to “repair” data into the destination cluster. It does this by reading the token assignments and streaming the parts of the SSTable that match the new tokens ranges to all the replicas in the cluster.
 
-![Cassandra Medusa Full Backups](https://raw.githubusercontent.com/wiki/thelastpickle/cassandra-medusa/images/cassandra_medusa_restore_case_3.png)
+![Medusa for Apache Cassandra Full Backups](images/cassandra_medusa_restore_case_3.png)
 
 
 Use the following command to run a restore to a cluster with a different topology :  
